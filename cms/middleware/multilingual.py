@@ -73,6 +73,7 @@ class MultilingualURLMiddleware(object):
         if prefix:
             request.path = "/" + "/".join(request.path.split("/")[2:])
             request.path_info = "/" + "/".join(request.path_info.split("/")[2:])
+            request.ORIGINAL_LANGUAGE_CODE = prefix
             t = prefix
             if t in SUPPORTED:
                 lang = t
@@ -99,11 +100,18 @@ class MultilingualURLMiddleware(object):
         language = self.get_language_from_request(request)
         translation.activate(language)
         request.LANGUAGE_CODE = language
-       
+
+    def get_language_for_response(self, request):
+        if (hasattr(request, 'ORIGINAL_LANGUAGE_CODE')):
+            return request.ORIGINAL_LANGUAGE_CODE
+        if (hasattr(request, 'LANGUAGE_CODE')):
+            return request.LANGUAGE_CODE
+        return self.get_language_from_request(request)
+        
     def process_response(self, request, response):
-        language = getattr(request, 'LANGUAGE_CODE', self.get_language_from_request(request))
-        local_middleware = LocaleMiddleware()
-        response =local_middleware.process_response(request, response)
+        language = self.get_language_for_response(request)
+        locale_middleware = LocaleMiddleware()
+        response = locale_middleware.process_response(request, response)
         path = unicode(request.path)
 
         # note: pages_root is assumed to end in '/'.
@@ -123,7 +131,7 @@ class MultilingualURLMiddleware(object):
             response.content = patch_response(
                 decoded_response,
                 pages_root,
-                request.LANGUAGE_CODE
+                language
             )
 
         if (response.status_code == 301 or response.status_code == 302 ):
